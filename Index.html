@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OAuth 2.0 Token Flow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body
+    class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-6"
+  >
+    <h2 class="text-3xl font-bold text-gray-800 mb-6">
+      OAuth 2.0 Token Flow Simulation
+    </h2>
+
+    <div class="flex space-x-4 mb-6">
+      <button
+        onclick="login()"
+        class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg shadow-md transition"
+      >
+        Login
+      </button>
+      <button
+        onclick="fetchData()"
+        class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md transition"
+      >
+        Fetch Data
+      </button>
+      <button
+        onclick="logout()"
+        class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg shadow-md transition"
+      >
+        Logout
+      </button>
+    </div>
+
+    <p id="status" class="text-lg font-semibold text-gray-700">
+      🔴 Not Logged In
+    </p>
+    <div
+      class="flex gap-12 flex-row mt-6 space-y-6 w-full justify-center align-start"
+    >
+      <div
+        class="bg-white shadow-lg rounded-lg p-6 w-full max-w-md mt-6 h-full"
+      >
+        <h3 class="text-xl font-semibold mb-4 text-gray-800">Token Details</h3>
+        <div class="p-4 rounded-lg mb-3 border border-green-300 bg-green-50">
+          <strong class="text-green-700">Access Token:</strong>
+          <p id="accessToken" class="text-gray-700 text-sm break-all">None</p>
+          <p class="text-sm mt-1">
+            Expires in:
+            <span id="accessTimer" class="font-semibold text-green-600"
+              >--</span
+            >
+            sec
+          </p>
+        </div>
+        <div class="p-4 rounded-lg border border-red-300 bg-red-50">
+          <strong class="text-red-700">Refresh Token:</strong>
+          <p id="refreshToken" class="text-gray-700 text-sm break-all">None</p>
+          <p class="text-sm mt-1">
+            Expires in:
+            <span id="refreshTimer" class="font-semibold text-red-600">--</span>
+            sec
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-white shadow-lg rounded-lg p-6 w-full max-w-md mt-6 h-full"
+      >
+        <h3 class="text-xl font-semibold mt-8 mb-4 text-gray-800">
+          Activity Log
+        </h3>
+        <div
+          id="log"
+          class="bg-white shadow-md rounded-lg p-4 w-full max-w-md h-64 overflow-y-auto border border-gray-300"
+        >
+          <p class="text-gray-500 text-sm">No activity yet...</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let accessToken = null;
+      let refreshToken = null;
+      let accessTokenExpiry = null;
+      let refreshTokenExpiry = null;
+      let tokenInterval;
+      let isRefreshing = false;
+
+      function logMessage(message, type = "info") {
+        const logDiv = document.getElementById("log");
+        const entry = document.createElement("div");
+        entry.className = "p-2 mb-1 rounded text-sm flex justify-between";
+
+        if (type === "success") {
+          entry.classList.add(
+            "bg-green-100",
+            "text-green-700",
+            "border-l-4",
+            "border-green-500"
+          );
+        } else if (type === "error") {
+          entry.classList.add(
+            "bg-red-100",
+            "text-red-700",
+            "border-l-4",
+            "border-red-500"
+          );
+        } else {
+          entry.classList.add(
+            "bg-gray-100",
+            "text-gray-700",
+            "border-l-4",
+            "border-gray-400"
+          );
+        }
+
+        const timestamp = new Date().toLocaleTimeString();
+        entry.innerHTML = `<span class="font-semibold">${message}</span><span class="text-gray-500 text-xs">${timestamp}</span>`;
+        logDiv.prepend(entry);
+      }
+
+      function login() {
+        accessToken = "access_" + Math.random().toString(36).substr(2, 5);
+        refreshToken = "refresh_" + Math.random().toString(36).substr(2, 5);
+        accessTokenExpiry = Date.now() + 10000;
+        refreshTokenExpiry = Date.now() + 30000;
+        document.getElementById("status").innerText =
+          "🟢 Logged In (Access Token Active)";
+        logMessage("User logged in. Tokens generated.", "success");
+        updateUI();
+        startTokenExpiryCheck();
+      }
+
+      function fetchData() {
+        if (!accessToken) {
+          logMessage("Attempted to fetch data without access token.", "error");
+          return;
+        }
+        if (Date.now() > accessTokenExpiry) {
+          logMessage("Access token expired. Attempting refresh.", "error");
+          refreshAccessToken(fetchData);
+          return;
+        }
+        logMessage("Fetched protected data successfully.", "success");
+        document.getElementById("status").innerText =
+          "🔵 Fetched Data (Access Token Valid)";
+      }
+
+      function refreshAccessToken(callback) {
+        if (isRefreshing) return;
+
+        if (!refreshToken || Date.now() > refreshTokenExpiry) {
+          logMessage("Refresh token expired. User must log in again.", "error");
+          logout();
+          return;
+        }
+
+        isRefreshing = true;
+        setTimeout(() => {
+          accessToken = "new_access_" + Math.random().toString(36).substr(2, 5);
+          accessTokenExpiry = Date.now() + 10000;
+          logMessage("Access token refreshed successfully.", "success");
+          updateUI();
+          isRefreshing = false;
+
+          if (callback) callback();
+        }, 1000);
+      }
+
+      function logout() {
+        accessToken = null;
+        refreshToken = null;
+        accessTokenExpiry = null;
+        refreshTokenExpiry = null;
+        clearInterval(tokenInterval);
+        document.getElementById("status").innerText = "🔴 Logged Out";
+        logMessage("User logged out. Tokens cleared.", "info");
+        updateUI();
+      }
+
+      function startTokenExpiryCheck() {
+        clearInterval(tokenInterval);
+        tokenInterval = setInterval(() => {
+          if (accessToken && Date.now() > accessTokenExpiry) {
+            refreshAccessToken();
+          }
+          updateTimers();
+        }, 1000);
+      }
+
+      function updateUI() {
+        document.getElementById("accessToken").innerText =
+          accessToken || "None";
+        document.getElementById("refreshToken").innerText =
+          refreshToken || "None";
+        updateTimers();
+      }
+
+      function updateTimers() {
+        let accessRemaining = accessTokenExpiry
+          ? Math.max(0, Math.floor((accessTokenExpiry - Date.now()) / 1000))
+          : "--";
+        let refreshRemaining = refreshTokenExpiry
+          ? Math.max(0, Math.floor((refreshTokenExpiry - Date.now()) / 1000))
+          : "--";
+        document.getElementById("accessTimer").innerText = accessRemaining;
+        document.getElementById("refreshTimer").innerText = refreshRemaining;
+        document
+          .getElementById("accessTimer")
+          .classList.toggle("text-red-600", accessRemaining === 0);
+        document
+          .getElementById("refreshTimer")
+          .classList.toggle("text-red-600", refreshRemaining === 0);
+      }
+    </script>
+  </body>
+</html>
